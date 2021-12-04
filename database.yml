@@ -1,0 +1,175 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  selector:
+    app: database
+  ports:
+  - port: 5432
+    #targetPort: 5433
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: psql-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database
+spec:
+  selector:
+    matchLabels:
+      app: database
+  template:
+    metadata:
+      labels:
+        app: database
+    spec:
+      volumes:
+        - name: dbinit-vol
+          configMap:
+            name: db-init
+        - name: postgres-persistent-storage
+          persistentVolumeClaim:
+            claimName: psql-pv-claim 
+      containers:
+      - name: database
+        image: postgres:14.1
+        env: 
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef: 
+                name: db-secret
+                key: password
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 5433
+        volumeMounts:
+          - name: dbinit-vol
+            mountPath: /docker-entrypoint-initdb.d
+          - name: postgres-persistent-storage
+            mountPath: /var/lib/postgresql/data
+          
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init
+data:
+  init.sql: |
+    create table users (
+    username text primary key,
+    email text not null, 
+    created_at date not null default current_timestamp 
+
+    );
+
+    create table currency (
+      id serial primary key,
+      description text not null unique,
+      rate numeric(19, 4) not null,
+      created_at date default current_timestamp
+    );
+
+    create table account_type(
+      id serial primary key, 
+      description text not null unique,
+      created_at date default current_timestamp
+
+    );
+
+    create table account (
+      id text not null primary key,
+      description text not null, 
+      account_type_id integer not null references account_type(id),
+      currency_id integer not null references currency(id),
+      amount numeric(19, 4) not null,
+      username_id text not null references users(username),
+      created_at date not null default current_timestamp
+    );
+
+
+    create table category ( 
+      id serial primary key,
+      description text not null unique,
+      category_type text not null,
+      created_at date not null default current_timestamp
+    );
+
+    create table budget (
+      id text primary key, 
+      category_id integer not null references category(id),
+      amount numeric(19,4) not null, 
+      username_id text not null references users(username),
+      account_id text not null references account(id),
+      created_at date not null default current_timestamp
+    );
+
+    create table transactions (
+      id text primary key, 
+      amount numeric(19,4) not null, 
+      category_id integer not null references category(id), 
+      account_id text not null references account(id),
+      username_id text not null references users(username),
+      transaction_date date not null 
+      
+    );
+
+
+    insert into currency (description, rate) values ('USD', 1);
+    insert into currency (description, rate) values ('CAD', 1.28);
+    insert into currency (description, rate) values ('EUR', 0.88);
+    insert into currency (description, rate) values ('JPY', 113.10);
+    insert into currency (description, rate) values ('GBP', 0.75);
+    insert into currency (description, rate) values ('MXN', 21.33);
+    insert into currency (description, rate) values ('BRL', 5.65);
+    insert into currency (description, rate) values ('COP', 3937.00);
+    insert into currency (description, rate) values ('ARS', 101.05);
+    insert into currency (description, rate) values ('AUD', 1.41);
+    insert into currency (description, rate) values ('HLN', 24.151);
+    insert into currency (description, rate) values ('CRC', 630.73);
+    insert into currency (description, rate) values ('KRW', 1179.94);
+    insert into currency (description, rate) values ('NIO', 35.36);
+    insert into currency (description, rate) values ('GTQ', 7.76);
+    insert into currency (description, rate) values ('CNY', 6.37);
+
+    insert into account_type (description) values ('Savings');
+    insert into account_type (description) values ('Regular');
+    insert into account_type (description) values ('Loan');
+    insert into account_type (description) values ('Credit Card');
+    insert into account_type (description) values ('Debit Card');
+    insert into account_type (description) values ('Cash');
+
+    insert into category (description, category_type) values ('Food', 'Expense');
+    insert into category (description, category_type) values ('Social Life', 'Expense');
+    insert into category (description, category_type) values ('Self-development', 'Expense');
+    insert into category (description, category_type) values ('Transportation', 'Expense');
+    insert into category (description, category_type) values ('Culture', 'Expense');
+    insert into category (description, category_type) values ('Household','Expense');
+    insert into category (description, category_type) values ('Apparel', 'Expense');
+    insert into category (description, category_type) values ('Beauty', 'Expense');
+    insert into category (description, category_type) values ('Health', 'Expense');
+    insert into category (description, category_type) values ('Education', 'Expense');
+    insert into category (description, category_type) values ('Gift', 'Expense');
+    insert into category (description, category_type) values ('Memberships', 'Expense');
+    insert into category (description, category_type) values ('Other', 'Expense');
+    insert into category (description, category_type) values ('Salary', 'Income');
+    insert into category (description, category_type) values ('Allowance', 'Income');
+    insert into category (description, category_type) values ('Petty Cash', 'Income');
+    insert into category (description, category_type) values ('Bonus', 'Income');
+
